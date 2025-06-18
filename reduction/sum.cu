@@ -1,3 +1,5 @@
+#include <__clang_cuda_builtin_vars.h>
+#include <__clang_cuda_runtime_wrapper.h>
 #include <cmath>
 #include <iostream>
 
@@ -42,7 +44,7 @@ void findSum(
 
 
 
-void launch_findSum(
+float launch_findSum(
     float *vector,
     int N
 ){
@@ -75,8 +77,34 @@ void launch_findSum(
     h_output = new float[blockPerGrid];
     cudaMemcpy(h_output , output , blockPerGrid * sizeof(float) , cudaMemcpyDeviceToHost);
 
-    std::cout << h_output[0] << std::endl;
+    // std::cout << h_output[0] << std::endl;
+    return h_output[0];
 }
+
+
+
+//----------------------------
+
+
+__global__
+void warpSum(
+    float* vector,
+    float* output,
+    int N
+){
+    int laneId = threadIdx.x % 32;
+
+    float value = vector[threadIdx.x];
+    for(int offset = 16 ; offset > 0 ; offset /=2){
+        value += __shfl_xor_sync(0xFFFFFFFF , value , offset , 32);
+    }
+
+    if(laneId == 0){
+        output[threadIdx.x / 32] = value;
+    }
+
+}
+
 
 
 int main(){
@@ -96,10 +124,10 @@ int main(){
     cudaMalloc((void**)&vector , sizeof(float)* N);
     cudaMemcpy(vector , input , N * sizeof(float) , cudaMemcpyHostToDevice);
 
-    launch_findSum(vector,  N);
+    float naive_out = launch_findSum(vector,  N);
 
     // std::cout << std::accumulate(input , input + N ,0) << std::endl;
-    std::cout << sum_verify << std::endl;
+    std::cout << (sum_verify == naive_out) << std::endl;
 
     
 }
