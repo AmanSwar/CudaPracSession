@@ -5,6 +5,28 @@
 #define K 10000
 
 
+
+float time_it(void (*function)(float* , float* , float*) ,float* matrixA , float* matrixB , float* output){
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start, 0);
+
+    //launch kernel
+    function(matrixA , matrixB , output);
+
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop); 
+    float elapsedTime;
+    cudaEventElapsedTime(&elapsedTime, start, stop);
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+}
+
+
 int main(){
 
     float* matrixA_host = new float[M*K];
@@ -28,20 +50,7 @@ int main(){
     cudaMemcpy(matrixA , matrixA_host , M*K*sizeof(float) , cudaMemcpyHostToDevice);
     cudaMemcpy(matrixB , matrixB_host , N*K*sizeof(float) , cudaMemcpyHostToDevice);
 
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
-
-    // cudaEventRecord(start, 0);
-
-    // //launch kernel
-    // cudaEventRecord(stop, 0);
-    // cudaEventSynchronize(stop); 
-    // float elapsedTime;
-    // cudaEventElapsedTime(&elapsedTime, start, stop);
-
-    // cudaEventDestroy(start);
-    // cudaEventDestroy(stop);
+    
 
 
 
