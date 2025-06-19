@@ -1,10 +1,8 @@
-#include <__clang_cuda_builtin_vars.h>
-#include <__clang_cuda_runtime_wrapper.h>
 #include <cstdlib>
+#include "main.h"
 #include <cuda_runtime.h>
-#define M 10000
-#define N 10000
-#define K 10000
+
+
 
 
 __global__
@@ -33,14 +31,24 @@ void launch_naive_matmul(
     float* output
 ){
 
-    dim3 blockDim()
+    int threadsPerBlock = 1024;
+    int blocksPerGrid = ((M+N) + threadsPerBlock - 1) / threadsPerBlock;
 
+    naive_matmul<<<blocksPerGrid , threadsPerBlock>>>(
+        matrixA,
+        matrixB,
+        output
+    );
+    cudaDeviceSynchronize();
 }
 
 
 
 
 
+
+//pybind function
+void matmul(at::Tensor)
 
 
 float time_it(void (*function)(float* , float* , float*) ,float* matrixA , float* matrixB , float* output){
