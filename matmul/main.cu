@@ -1,8 +1,45 @@
+#include <__clang_cuda_builtin_vars.h>
+#include <__clang_cuda_runtime_wrapper.h>
 #include <cstdlib>
 #include <cuda_runtime.h>
 #define M 10000
 #define N 10000
 #define K 10000
+
+
+__global__
+void naive_matmul(
+    float* matrixA,
+    float* matirxB,
+    float* output
+){
+    int global_index_x = blockDim.x * blockIdx.x + threadIdx.x;
+    // int global_index_y = blockDim.y * blockIdx.y + threadIdx.y;
+    int x = global_index_x  / M;
+    int y = global_index_x % N;
+
+    if(x < M && y < N){
+        for(int k = 0 ; k < K ; k++){
+            output[x * M + y] = matrixA[x*K +k] * matirxB[k*N + y];
+        }
+    }
+    
+}
+
+
+void launch_naive_matmul(
+    float* matrixA,
+    float* matrixB,
+    float* output
+){
+
+    dim3 blockDim()
+
+}
+
+
+
+
 
 
 
