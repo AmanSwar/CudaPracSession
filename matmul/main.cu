@@ -1,7 +1,19 @@
+#include <__clang_cuda_builtin_vars.h>
+#include <__clang_cuda_runtime_wrapper.h>
 #include <cstdlib>
+#include "ATen/core/interned_strings.h"
+#include "ATen/ops/glu_backward_ops.h"
 #include "main.h"
 #include <cuda_runtime.h>
 
+/*
+List of optimization
+- naive
+- tiled
+- optimized tiled -> increase register pr
+- tensor cores
+
+*/
 
 
 
@@ -24,7 +36,6 @@ void naive_matmul(
     
 }
 
-
 void launch_naive_matmul(
     float* matrixA,
     float* matrixB,
@@ -34,7 +45,7 @@ void launch_naive_matmul(
     int threadsPerBlock = 1024;
     int blocksPerGrid = ((M+N) + threadsPerBlock - 1) / threadsPerBlock;
 
-    naive_matmul<<<blocksPerGrid , threadsPerBlock>>>(
+    naive_matmul<<<blocksPerGrid ,  threadsPerBlock>>>(
         matrixA,
         matrixB,
         output
@@ -43,6 +54,49 @@ void launch_naive_matmul(
 }
 
 
+
+// -----------------------------------------------------------
+
+
+
+
+__global__
+void tiled_matmul(
+    float* matrixA,
+    float* matrixB,
+    float* output
+){
+
+    const int TILE_SIZE = 32;
+
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    int bx = blockIdx.x;
+    int by = blockIdx.y;    
+
+    int block_col = bx * TILE_SIZE + tx;  // gives all cols in a block  | 
+    //                                                                    ]-> row * row_offset + col = all address    
+    int block_row = by * TILE_SIZE + ty;   // gives all rows in a block | 
+
+    __shared__ float SM_A[TILE_SIZE][TILE_SIZE];
+    __shared__ float SM_B[TILE_SIZE][TILE_SIZE];
+
+    int total_tile_k = (K + TILE_SIZE - 1) / TILE_SIZE;
+
+    for(int tile = 0 ; tile < total_tile_k; tile ++){
+
+        if(block_row < M && block_col < K){
+            // SM_A[ty][tx] = matrixA[tile * TILE_SIZE + (block_row * K + block_col)];
+            SM_A[ty][tx] = matrixA[tile * TILE_SIZE + (ty * N + tx)];
+        }
+        if(block_row < K && block_col < N){
+            SM_B[ty][tx] = matrixB[block_col * TILE_SIZE + block_row];
+        }
+    }
+    
+
+}   
 
 
 
