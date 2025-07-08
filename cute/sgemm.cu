@@ -47,8 +47,8 @@ void gemm_device(
 
     //blocks in global
     Tensor gA = local_tile(matrixA , cta_tiler , cta_coord , Step<_1 ,X , _1>{});
-    Tensor gB = local_tile(matrixB , cta_tiler , cta_coord , Step<_1 ,X , _1>{});
-    Tensor gC = local_tile(matrixC , cta_tiler , cta_coord , Step<_1 ,X , _1>{});
+    Tensor gB = local_tile(matrixB , cta_tiler , cta_coord , Step<X ,_1 , _1>{});
+    Tensor gC = local_tile(matrixC , cta_tiler , cta_coord , Step<_1 , _1 , X>{});
 
 
     __shared__ TA smemA[cosize_v<ASmemLayout>];
