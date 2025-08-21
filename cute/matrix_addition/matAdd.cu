@@ -6,6 +6,7 @@
 #include <cutlass/arch/memory.h>
 #include <cutlass/gemm/threadblock/index_remat.h>
 
+#include "util.cuh"
 
 __global__ void matrix_add_kernel(
     float const* A,
@@ -37,4 +38,9 @@ void launch_kernel(float* A , float* B , float* C){
     dim3 blocksPerGrid((N + threadsPerBlock.x - 1) / threadsPerBlock.x , (M + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
     matrix_add_kernel<<<blocksPerGrid , threadsPerBlock>>>(A , B , C);
+}
+
+
+int main(){
+    benchmark(launch_kernel);
 }
