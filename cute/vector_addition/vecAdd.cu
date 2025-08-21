@@ -7,12 +7,12 @@
 #include <vector>
 #include <cute/tensor.hpp>
 
+#include "util.cuh"
 
 __global__ void vector_add_kernel(
     float const* A,
     float const* B,
-    float* C,
-    int N
+    float* C
 ){
     using namespace cute;
 
@@ -28,49 +28,12 @@ __global__ void vector_add_kernel(
     }
 }
 
+void launch_naive_kernel(float* da , float* db , float* dc){
+  int thread_per_block = 256;
+  int block_per_grid = (N + thread_per_block - 1) / thread_per_block;
+  vector_add_kernel<<<block_per_grid, thread_per_block>>>(da, db, dc);
+}
+
 int main(){
-    int N = 1024;
-    size_t bytes = N * sizeof(float);
-
-    std::vector<float> ha(N) , hb(N) , hc(N);
-    for (int i = 0; i < N; ++i) {
-      ha[i] = static_cast<float>(i);
-      hb[i] = static_cast<float>(i * 2);
-    }
-
-    float *da, *db, *dc;
-    cudaMalloc(&da, bytes);
-    cudaMalloc(&db, bytes);
-    cudaMalloc(&dc, bytes);
-
-    cudaMemcpy(da , ha.data() , bytes , cudaMemcpyHostToDevice);
-    cudaMemcpy(db , hb.data() , bytes , cudaMemcpyHostToDevice);
-
-    int thread_per_block = 256;
-    int block_per_grid = (N + thread_per_block - 1) / thread_per_block;
-    vector_add_kernel<<<block_per_grid, thread_per_block>>>(da, db, dc, N);
-    cudaEvent_t start ,end;
-    cudaEventCreate(&start);
-    cudaEventCreate(&end);
-
-    cudaEventRecord(start);
-    for(int i = 0 ; i < 100 ; i++){
-        vector_add_kernel<<<block_per_grid , thread_per_block>>>(da , db , dc , N);
-    
-    }
-    cudaEventRecord(end);
-    cudaEventSynchronize(end);
-
-    float ms = 0.0f;
-    cudaEventElapsedTime(&ms, start, end);
-    std::cout << "TIME : " << ms / 100 << std::endl;
-
-    cudaMemcpy(hc.data(), dc, bytes, cudaMemcpyDeviceToHost);
-    for (int i = 0; i < N; ++i) {
-        if (abs(hc[i] - (ha[i] + hb[i])) > 1e-5) {
-            std::cout << "Verification failed at index " << i << "!" << std::endl;
-            return -1;
-        }
-    }
-    std::cout << "Kernel 1 (Vector Add): Verification successful!" << std::endl;
+    benchmark(launch_naive_kernel);
 }
