@@ -57,3 +57,14 @@ void cublas_matAdd(float *da, float *db, float *dc) {
   cudaEventDestroy(end);
   cublasDestroy(handle);
 }
+
+bool checker(float *cublas_out, float *kernel_out) {
+
+  for (int i = 0; i < M*N; i++) {
+    if (std::abs(cublas_out[i] - kernel_out[i]) > 1e-3) {
+      return false;
+    }
+  }
+
+  return true;
+}
