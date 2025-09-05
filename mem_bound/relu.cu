@@ -56,9 +56,11 @@ void launch_coal(half *matrixA, half *matrixOut, int M, int N) {
 
 // ======================================= BENCHMARK ================================================
 
-
-
-
+void inline cpu_relu(half *ha, half *hb, int M, int N) {
+  for (int i = 0; i < M * N; i++) {
+    hb[i] = fmax(0.0, ha[i]);
+  }
+}
 
 void benchmark(void (*function)(half *, half * , int , int) , std::string name, half* a , half* b , int M , int N) { 
     cudaEvent_t start, end;
