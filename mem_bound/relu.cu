@@ -29,6 +29,44 @@ void launch_naive(half *matrixA, half *matrixOut, int M, int N) {
   relu_naive<<<grid_dim, block_dim>>>(matrixA, matrixOut, M, N);
 }
 
+
+
+// ====================================== VECTORIZED ===========================================
+
+#define HALF2(val) (*reinterpret_cast<half2 *>(&val))
+
+__global__ void relu_vec(
+    half* matrixA,
+    half* matrixO,
+    int M , int N
+){
+    int row_index = blockIdx.x;
+    int local_index = threadIdx.x;
+
+    int row_start = row_index * N;
+
+    for(int idx = local_index*2; idx < N ; idx += blockDim.x*2){
+        
+        if(idx + 1 < N){
+            half2 acc;
+            half2 val = __ldg(&HALF2(matrixA[row_start + idx]));
+            acc = __hmax2(__float2half2_rn(0.0) , val);
+            HALF2(matrixO[row_start + idx]) = acc;
+        }
+        else{
+            half val = __ldg(&matrixA[row_start + idx]);
+            half result = __hmax(__float2half(0.0) , val);
+            matrixO[row_start] = result;
+        }
+    }
+}
+
+void launch_vec(half *matrixA, half *matrixOut, int M, int N) {
+  int block_dim = 1024;
+  int grid_dim = M;
+  relu_vec<<<grid_dim, block_dim>>>(matrixA, matrixOut, M, N);
+}
+
 // ======================================= BENCHMARK ================================================
 
 void inline cpu_relu(half *ha, half *hb, int M, int N) {
@@ -103,6 +141,7 @@ int main(){
     cudaMemcpy(db , hb , _size , cudaMemcpyHostToDevice);
 
     benchmark(launch_naive , "Naive" , da , db , M , N , hb , hc);
+    benchmark(launch_vec , "Vec" , da , db , M , N , hb , hc);
     
     
 }
