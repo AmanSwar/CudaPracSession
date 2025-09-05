@@ -6,7 +6,7 @@
 
 
 
-// =============================================NAIVE BUT COALESCED==============================================
+// =============================================NAIVE==============================================
 
 __global__ void relu_naive(
     half* matrixA,
@@ -30,6 +30,29 @@ void launch_naive(half *matrixA, half *matrixOut, int M, int N) {
 }
 
 
+// ========================================== COALESCED =========================================
+__global__ void relu_coal(
+    half* matrixA,
+    half* matrixO,
+    int M , int N
+){
+    int global_index = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+    
+    const half zero = __float2half(0.0f);
+    
+    for (int i = global_index; i < M*N; i += stride) {
+        matrixO[i] = __hmax(zero, matrixA[i]);
+    }
+}
+
+void launch_coal(half *matrixA, half *matrixOut, int M, int N) {
+  int block_dim = 256;
+  int min_size = 0;
+  cudaOccupancyMaxPotentialBlockSize(&min_size, &block_dim, relu_coal, 0, 0);
+  int grid_dim = (block_dim + (M*N) - 1) / block_dim;
+  relu_coal<<<grid_dim, block_dim>>>(matrixA, matrixOut, M, N);
+}
 
 // ====================================== VECTORIZED ===========================================
 
@@ -65,6 +88,49 @@ void launch_vec(half *matrixA, half *matrixOut, int M, int N) {
   int block_dim = 1024;
   int grid_dim = M;
   relu_vec<<<grid_dim, block_dim>>>(matrixA, matrixOut, M, N);
+}
+
+
+// ====================================== AGGRESIVE VECTORIZATION ============================
+
+#define NUM_ELEMENTS_PER_THREAD 8
+
+__global__ void relu_vecfp16x8(
+    half* matrixA,
+    half* matrixO,
+    int M , int N
+){
+    int row_index = blockIdx.x;
+    int row_start = row_index * N;
+
+    int local_index = threadIdx.x;
+
+    #pragma unroll
+    for(int idx = local_index * NUM_ELEMENTS_PER_THREAD; idx < N ; idx += blockDim.x * NUM_ELEMENTS_PER_THREAD){
+        #pragma unroll
+        for(int i = 0 ; i < NUM_ELEMENTS_PER_THREAD;  i += 2){
+            if(idx + i + 1 < N){
+                half2 values = __ldca(&HALF2(matrixA[row_start + idx + i]));
+                half2 acc = __hmax2(__float2half2_rn(0.0) , values);
+                HALF2(matrixO[row_start + idx + i]) = acc;
+        
+            }
+            else{
+                half val = __ldca(&matrixA[row_start + idx + i]);
+                half acc = __hmax(__float2half(0.0) , val);
+                matrixO[row_start + idx + i] = acc;
+            }
+        }
+    }
+
+}
+
+void launch_vecfp16x8(half *matrixA, half *matrixOut, int M, int N) {
+  int block_dim = 1024;
+  int grid_dim = M;
+  int min_size = 0;
+  cudaOccupancyMaxPotentialBlockSize(&min_size, &block_dim, relu_vecfp16x8 , 0 , 0);
+  relu_vecfp16x8<<<grid_dim, block_dim>>>(matrixA, matrixOut, M, N);
 }
 
 // ======================================= BENCHMARK ================================================
@@ -141,7 +207,7 @@ int main(){
     cudaMemcpy(db , hb , _size , cudaMemcpyHostToDevice);
 
     benchmark(launch_naive , "Naive" , da , db , M , N , hb , hc);
+    benchmark(launch_coal , "Coal " , da , db , M , N , hb , hc);
     benchmark(launch_vec , "Vec" , da , db , M , N , hb , hc);
-    
-    
+    benchmark(launch_vecfp16x8, "Vec fp16x8 ", da, db, M, N, hb, hc);
 }
