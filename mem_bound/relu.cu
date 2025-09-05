@@ -62,6 +62,19 @@ void inline cpu_relu(half *ha, half *hb, int M, int N) {
   }
 }
 
+
+bool inline verify(half* a , half* b , int M , int N){
+    for(int i = 0 ; i < M*N ; i++){
+        if(std::abs(__half2float(a[i]) - __half2float(b[i])) > 1e-3){
+            std::cout << "Fail" << std::endl;
+            return false;
+        }
+    }
+    std::cout << "Pass" << std::endl;
+    return true;
+}
+
+
 void benchmark(void (*function)(half *, half * , int , int) , std::string name, half* a , half* b , int M , int N) { 
     cudaEvent_t start, end;
     
