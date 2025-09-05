@@ -1,39 +1,14 @@
+#include <cstdlib>
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 #include <iostream>
 #include <string>
 
 
-// ================================= NAIVE ===================
+
+// =============================================NAIVE BUT COALESCED==============================================
+
 __global__ void relu_naive(
-    half* matrixA,
-    half* matrixOut,
-    int M , int N
-){
-    int global_index_x = blockDim.x  * blockIdx.x + threadIdx.x; // total range -> 0 - M-1
-    int local_index_x = threadIdx.x;
-    int row_start = global_index_x * N;
-    if(global_index_x < M){
-        for(int idx = local_index_x ; idx < N ; idx += blockDim.x){
-            matrixOut[row_start +idx] = __hmax(__float2half(0.0) , matrixA[row_start + idx]); 
-        }
-    }
-}
-
-void launch_naive(
-    half* matrixA,
-    half* matrixOut,
-    int M , int N
-){
-    int block_dim = 1024;
-    int grid_dim = M;
-    relu_naive<<<grid_dim , block_dim>>>(matrixA , matrixOut , M , N);
-}
-
-
-// ===========================================================================================
-
-__global__ void relu_coal(
     half* matrixA,
     half* matrixO,
     int M , int N
@@ -44,21 +19,21 @@ __global__ void relu_coal(
     int row_start = row_index * N;
     
     for(int idx = local_index ; idx < N ; idx+= blockDim.x){
-        matrixO[row_start + idx] = __hmax(0.0 , matrixA[row_start + idx]);
+        matrixO[row_start + idx] = __hmax(__float2half(0.0) , matrixA[row_start + idx]);
     }
 }
 
-void launch_coal(half *matrixA, half *matrixOut, int M, int N) {
+void launch_naive(half *matrixA, half *matrixOut, int M, int N) {
   int block_dim = 1024;
   int grid_dim = M;
-  relu_coal<<<grid_dim, block_dim>>>(matrixA, matrixOut, M, N);
+  relu_naive<<<grid_dim, block_dim>>>(matrixA, matrixOut, M, N);
 }
 
 // ======================================= BENCHMARK ================================================
 
 void inline cpu_relu(half *ha, half *hb, int M, int N) {
   for (int i = 0; i < M * N; i++) {
-    hb[i] = fmax(0.0, ha[i]);
+    hb[i] = __float2half(fmaxf(0.0, __half2float(ha[i])));
   }
 }
 
@@ -67,6 +42,7 @@ bool inline verify(half* a , half* b , int M , int N){
     for(int i = 0 ; i < M*N ; i++){
         if(std::abs(__half2float(a[i]) - __half2float(b[i])) > 1e-3){
             std::cout << "Fail" << std::endl;
+            std::cout << __half2float(a[i]) << " : " << __half2float(b[i]) << std::endl;
             return false;
         }
     }
@@ -74,8 +50,14 @@ bool inline verify(half* a , half* b , int M , int N){
     return true;
 }
 
+void inline init(half* a , int size){
+    for(int i = 0 ; i < size ; i++){
+        float val = (i % 2 == 0) ? (float)(i+1) : -(float)(i + 1);
+        a[i] = __float2half(val);
+    }
+}
 
-void benchmark(void (*function)(half *, half * , int , int) , std::string name, half* a , half* b , int M , int N) { 
+void benchmark(void (*function)(half *, half * , int , int) , std::string name, half* a , half* b , int M , int N , half* hb , half* hc) { 
     cudaEvent_t start, end;
     
     cudaEventCreate(&start);
@@ -93,6 +75,9 @@ void benchmark(void (*function)(half *, half * , int , int) , std::string name, 
     cudaEventElapsedTime(&ms , start , end);
     std::cout << name << " average time: " << (ms / 100) << " ms" << std::endl;
     std::cout << name << " GFLOPS : " << ((M*N) / ((ms / 100)/1000))/ 1e9 << std::endl;
+    
+    cudaMemcpy(hb , b , sizeof(half) * M * N , cudaMemcpyDeviceToHost);
+    bool result = verify(hb , hc , M , N);
 }
 
 int main(){
@@ -105,6 +90,10 @@ int main(){
     half* hb = new half[M*N];
     half* hc = new half[M*N];
 
+    init(ha , M * N);
+    cpu_relu(ha , hc , M , N);
+
+
     half* da , *db;
     cudaMalloc(&da , _size);
     cudaMalloc(&db , _size);
@@ -113,8 +102,7 @@ int main(){
     cudaMemcpy(da , ha , _size , cudaMemcpyHostToDevice);
     cudaMemcpy(db , hb , _size , cudaMemcpyHostToDevice);
 
-    benchmark(launch_naive , "Naive" , da , db , M , N);
-    benchmark(launch_coal , "Coal" , da , db , M , N);
+    benchmark(launch_naive , "Naive" , da , db , M , N , hb , hc);
     
     
 }
