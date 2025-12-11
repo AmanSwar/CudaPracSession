@@ -1,10 +1,12 @@
+#pragma once
+
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 
 #include "utils.cuh"
 
 
-__global__ void rmsnormKernel(
+__global__ void rmsnormNaiveKernel(
   half* inputMatrix, // M , N
   half* weightMatrix, // (1,N)
   half* outMatrix, // M , N
@@ -50,3 +52,18 @@ __global__ void rmsnormKernel(
   }
 }
 
+
+void launchNaiveRms(
+  half* inputMatrix,
+  half* weightArray,
+  half* outputMatrix,
+  int M , int N
+){
+  int threadsPerBlock = 256;
+  int blocksPerGrid = M;
+  
+  size_t smemArraySize = sizeof(float) * N;
+  size_t smemPartialSize = sizeof(float) * threadsPerBlock;
+  size_t smemSize = smemArraySize + smemPartialSize;
+  rmsnormNaiveKernel<<<blocksPerGrid , threadsPerBlock , smemSize>>>(inputMatrix, weightArray, outputMatrix, M, N);
+}
